@@ -2,9 +2,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY src/producer/mock_kafka_producer.py .
-COPY requirements.txt .
+COPY src/producer/kafka_producer.py .
 
-RUN pip install -r requirements.txt
-
-CMD ["python", "mock_kafka_producer.py"]
+RUN pip install kafka-python \
+    numpy \
+    h5py \
+CMD ["python", "kafka_producer.py"]
