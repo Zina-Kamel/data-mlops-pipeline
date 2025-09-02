@@ -20,9 +20,7 @@ import os
 import subprocess
 import torch
 import torch.nn as nn
-import boto3
-import io
-import json
+from ml.models import MLP, TransformerModel
 
 from dotenv import load_dotenv
 
@@ -30,37 +28,9 @@ load_dotenv()
 
 ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
-
-class MLP(nn.Module):
-    def __init__(self, input_size, output_size):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_size, 128),
-            nn.ReLU(),
-            nn.Linear(128, output_size)
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-class TransformerModel(nn.Module):
-    def __init__(self, input_size, d_model=64, nhead=4, num_layers=2, dim_feedforward=128, dropout=0.1):
-        super().__init__()
-        self.embedding = nn.Linear(input_size, d_model)
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward,
-            dropout=dropout, batch_first=True
-        )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.fc_out = nn.Linear(d_model, 1)
-
-    def forward(self, x):
-        x = self.embedding(x).unsqueeze(1)
-        x = self.transformer_encoder(x)
-        x = x.squeeze(1)
-        return self.fc_out(x)
-
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+INPUT_DIM = 250  
+SEEN_EPISODES_KEY = "rlhf_preferences/seen_episode_keys.json"
 
 def load_best_model_from_s3(bucket="robot-data", artifact_prefix="ml", input_dim=22,
                             endpoint_url="http://minio:9000", aws_access_key=ACCESS_KEY,
@@ -98,7 +68,6 @@ def load_best_model_from_s3(bucket="robot-data", artifact_prefix="ml", input_dim
     print(f"Loaded best model from S3: {model_type} ({model_key})")
     return model
 
-INPUT_DIM = 250  
 best_model = load_best_model_from_s3(bucket="robot-data", artifact_prefix="ml", input_dim=INPUT_DIM)
 
 def episode_to_tensor(episode):
@@ -136,8 +105,6 @@ def recommend_episode(episode):
         pred = best_model(x)
     score = pred.mean().item()
     return "Accept" if score > 0.5 else "Reject"
-
-
 
 st.set_page_config(page_title="Robot Dashboard", layout="wide")
 st.title("Franka Arm Dashboard")
@@ -306,23 +273,6 @@ with live_tab:
     else:
         st.warning("No episode data available yet.")
 
-SEEN_EPISODES_KEY = "rlhf_preferences/seen_episode_keys.json"
-
-def load_seen_episodes():
-    try:
-        seen_buf = io.BytesIO()
-        s3.download_fileobj("robot-data", SEEN_EPISODES_KEY, seen_buf)
-        seen_buf.seek(0)
-        return json.load(seen_buf)
-    except:
-        return []  
-
-def save_seen_episodes(seen):
-    buf = io.BytesIO()
-    buf.write(json.dumps(seen).encode())
-    buf.seek(0)
-    s3.upload_fileobj(buf, "robot-data", SEEN_EPISODES_KEY)
-
 def load_episode_from_s3(key, bucket="robot-data", endpoint_url="http://minio:9000"):
     s3 = boto3.client(
         "s3",
@@ -369,7 +319,26 @@ def create_episode_video(df, fps=5):
 
     return video_bytes
 
+def load_seen_episodes(s3):
+    try:
+        s3.head_object(Bucket="robot-data", Key=SEEN_EPISODES_KEY)
+        buf = io.BytesIO()
+        s3.download_fileobj("robot-data", SEEN_EPISODES_KEY, buf)
+        buf.seek(0)
+        return json.load(buf)
+    except s3.exceptions.ClientError as e:
+        if e.response['Error']['Code'] in ("404", "NoSuchKey"):
+            empty_list = []
+            save_seen_episodes(s3, empty_list)
+            return empty_list
+        else:
+            raise
 
+def save_seen_episodes(s3, seen):
+    buf = io.BytesIO()
+    buf.write(json.dumps(seen).encode())
+    buf.seek(0)
+    s3.upload_fileobj(buf, "robot-data", SEEN_EPISODES_KEY)
 
 with rlhf_tab:
     st.title("RLHF Preference Selection")
@@ -380,28 +349,6 @@ with rlhf_tab:
         aws_access_key_id=ACCESS_KEY,
         aws_secret_access_key=SECRET_KEY
     )
-    SEEN_EPISODES_KEY = "rlhf_preferences/seen_episode_keys.json"
-
-    def load_seen_episodes(s3):
-        try:
-            s3.head_object(Bucket="robot-data", Key=SEEN_EPISODES_KEY)
-            buf = io.BytesIO()
-            s3.download_fileobj("robot-data", SEEN_EPISODES_KEY, buf)
-            buf.seek(0)
-            return json.load(buf)
-        except s3.exceptions.ClientError as e:
-            if e.response['Error']['Code'] in ("404", "NoSuchKey"):
-                empty_list = []
-                save_seen_episodes(s3, empty_list)
-                return empty_list
-            else:
-                raise
-
-    def save_seen_episodes(s3, seen):
-        buf = io.BytesIO()
-        buf.write(json.dumps(seen).encode())
-        buf.seek(0)
-        s3.upload_fileobj(buf, "robot-data", SEEN_EPISODES_KEY)
 
     seen_episode_keys = load_seen_episodes(s3)
 

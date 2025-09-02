@@ -30,7 +30,6 @@ def list_s3_keys(prefix=SOURCE_PREFIX):
     return [item["Key"] for item in response.get("Contents", []) if item["Key"].endswith(".parquet")]
 
 def transform_episode(df: pd.DataFrame) -> pd.DataFrame:
-    """Flatten JSON columns and select only stats-relevant columns"""
     df_flat = pd.json_normalize(df.to_dict(orient="records"))
 
     if "`obs.gripper_width`" in df_flat.columns:
