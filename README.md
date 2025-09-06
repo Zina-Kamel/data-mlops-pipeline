@@ -39,7 +39,7 @@ Create a .env file at the root of the project and populate the following variabl
 
 ```bash
 AIRFLOW_ADMIN_USER=
-AIRFLOW_ADMIN_PWD=
+AIRFLOW_ADMIN_PASSWORD=
 AIRFLOW__WEBSERVER__SECRET_KEY=
 
 MINIO_ENDPOINT=
