@@ -95,7 +95,7 @@ services:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__WEBSERVER__RBAC: "True"
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PWD}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
     depends_on:
       - postgres
       - kafka
