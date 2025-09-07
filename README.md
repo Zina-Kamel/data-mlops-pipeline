@@ -30,7 +30,7 @@ with human preference.
 ### 1. Clone the repository
 ```bash
 git clone https://github.com/Zina-Kamel/data-mlops-pipeline.git
-cd https://github.com/Zina-Kamel/data-mlops-pipeline.git
+cd data-mlops-pipeline
 ```
 
 ### 2. Create .env file
